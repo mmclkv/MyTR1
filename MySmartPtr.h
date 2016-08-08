@@ -12,6 +12,9 @@ class MySharedPtr;
 template <typename _T>
 class MyWeakPtr;
 
+template <typename _T>
+class MyUniquePtr;
+
 class Ref_Count {
 public:
 	Ref_Count() 
@@ -132,6 +135,10 @@ class MySharedPtr {
 
 	template <typename _Tx>
 	friend class MyWeakPtr;
+
+	template <typename _Tx>
+	friend class MyUniquePtr;
+
 public:
 	typedef _T Element_type;
 
@@ -343,6 +350,10 @@ class MyWeakPtr {
 
 	template <class _Tx>
 	friend class MySharedPtr;
+
+	template <typename _Tx>
+	friend class MyUniquePtr;
+
 public:
 	typedef _T Element_type;
 
@@ -428,6 +439,23 @@ public:
 private:
 	Element_type* _myPtr;
 	Ref_Count* _myRefC;
+};
+
+template <typename _T>
+class MyUniquePtr {
+	template <typename _Tx>
+	friend class MySharedPtr;
+
+	template <typename _Tx>
+	friend class MyUniquePtr;
+
+	template <typename _Tx>
+	friend class MyUniquePtr;
+
+public:
+
+private:
+
 };
 
 #endif
