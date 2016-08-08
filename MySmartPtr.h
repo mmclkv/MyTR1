@@ -226,7 +226,7 @@ public:
 	}
 
 	MySharedPtr(MySharedPtr&& _other) noexcept 
-		: _myPtr(std::move(_other._myPtr)), _myRefC(std::move(_other._myRefC))
+		: _myPtr(_other._myPtr), _myRefC(_other._myRefC)
 	{
 		_other._myPtr = nullptr;
 		_other._myRefC = nullptr;
@@ -398,6 +398,7 @@ public:
 		_myRefC = _other._myRefC;
 		if (_myRefC)
 			_myRefC->_Increment_Weak();
+		return *this;
 
 	}
 
