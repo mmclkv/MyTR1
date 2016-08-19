@@ -618,12 +618,7 @@ namespace MyTR1 {
 
 		template <class _U>
 		MyWeakPtr& operator= (const MySharedPtr<_U>& _other) noexcept {
-			if (_myRefC)
-				_myRefC->_Decrement_Weak();
-			_myPtr = _other._myPtr;
-			_myRefC = _other._myRefC;
-			if (_myRefC)
-				_myRefC->_Increment_Weak();
+			MyWeakPtr(_other).swap(*this);
 			return *this;
 
 		}
@@ -831,20 +826,6 @@ namespace MyTR1 {
 		{
 		}
 
-		template <typename _Tx, typename _Dx, typename =
-			typename enable_if<
-			is_convertible<typename MyUniquePtr<_Tx, _Dx>::pointer,
-			pointer>::value
-			&& !(is_array<_Tx>::value)
-			&& (is_reference<_Dx>::value
-				? is_same<_D, _Dx>::value
-				: is_convertible<_Dx, _D>::value)
-		>::type>
-			MyUniquePtr(MyUniquePtr<_Tx, _Dx>&& _other) noexcept
-			: _myPtr(_other.release()), _myDeleter(::std::forward<_Dx>(_other.get_deleter()))
-		{
-		}
-
 		MyUniquePtr(const MyUniquePtr&) = delete;
 
 		~MyUniquePtr() {
@@ -861,21 +842,6 @@ namespace MyTR1 {
 
 		MyUniquePtr& operator= (::std::nullptr_t) noexcept {
 			reset();
-			return *this;
-		}
-
-		template <class _Tx, class _Dx, typename =
-			typename enable_if<
-			is_convertible<typename MyUniquePtr<_Tx, _Dx>::pointer,
-			pointer>::value
-			&& !(is_array<_Tx>::value)
-			&& (is_reference<_Dx>::value
-				? is_same<_D, _Dx>::value
-				: is_convertible<_Dx, _D>::value)
-		>::type>
-			MyUniquePtr& operator= (MyUniquePtr<_Tx, _Dx>&& _other) noexcept {
-			reset(_other.release());
-			get_deleter() = ::std::forward<_Dx>(_other.get_deleter());
 			return *this;
 		}
 
@@ -914,7 +880,7 @@ namespace MyTR1 {
 		}
 
 		element_type& operator[](size_t _index) const {
-			return *(get() + _index);
+			return get()[_index];
 		}
 
 	private:
