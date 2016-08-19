@@ -791,6 +791,136 @@ namespace MyTR1 {
 		pointer _myPtr;
 		deleter_type _myDeleter;
 	};
+
+	template <typename _T, typename _D>
+	class MyUniquePtr<_T[], _D> {
+	public:
+		typedef _T element_type;
+		typedef _D deleter_type;
+		typedef typename has_member_pointer<typename remove_reference<_D>::type, _T*>::type pointer;
+
+		constexpr MyUniquePtr() noexcept
+			: _myPtr(nullptr), _myDeleter(_D())
+		{
+		}
+
+		constexpr MyUniquePtr(::std::nullptr_t) noexcept
+			: unique_ptr()
+		{
+		}
+
+		explicit MyUniquePtr(pointer _ptr) noexcept
+			: _myPtr(_ptr), _myDeleter(_D())
+		{
+		}
+
+		MyUniquePtr(pointer _ptr,
+			typename conditional<is_reference<_D>::value, _D, const _D&>::type _del) noexcept
+			: _myPtr(_ptr), _myDeleter(_del)
+		{
+		}
+
+		MyUniquePtr(pointer _ptr,
+			typename remove_reference<_D>::type&& _del) noexcept
+			: _myPtr(_ptr), _myDeleter(::std::move(_del))
+		{
+		}
+
+		MyUniquePtr(MyUniquePtr&& _other) noexcept
+			: _myPtr(_other.release()), _myDeleter(::std::forward<_D>(_other.get_deleter()))
+		{
+		}
+
+		template <typename _Tx, typename _Dx, typename =
+			typename enable_if<
+			is_convertible<typename MyUniquePtr<_Tx, _Dx>::pointer,
+			pointer>::value
+			&& !(is_array<_Tx>::value)
+			&& (is_reference<_Dx>::value
+				? is_same<_D, _Dx>::value
+				: is_convertible<_Dx, _D>::value)
+		>::type>
+			MyUniquePtr(MyUniquePtr<_Tx, _Dx>&& _other) noexcept
+			: _myPtr(_other.release()), _myDeleter(::std::forward<_Dx>(_other.get_deleter()))
+		{
+		}
+
+		MyUniquePtr(const MyUniquePtr&) = delete;
+
+		~MyUniquePtr() {
+			if (get()) {
+				get_deleter()(get());
+			}
+		}
+
+		MyUniquePtr& operator= (MyUniquePtr&& _other) noexcept {
+			reset(_other.release());
+			get_deleter() = ::std::forward<_D>(_other.get_deleter());
+			return *this;
+		}
+
+		MyUniquePtr& operator= (::std::nullptr_t) noexcept {
+			reset();
+			return *this;
+		}
+
+		template <class _Tx, class _Dx, typename =
+			typename enable_if<
+			is_convertible<typename MyUniquePtr<_Tx, _Dx>::pointer,
+			pointer>::value
+			&& !(is_array<_Tx>::value)
+			&& (is_reference<_Dx>::value
+				? is_same<_D, _Dx>::value
+				: is_convertible<_Dx, _D>::value)
+		>::type>
+			MyUniquePtr& operator= (MyUniquePtr<_Tx, _Dx>&& _other) noexcept {
+			reset(_other.release());
+			get_deleter() = ::std::forward<_Dx>(_other.get_deleter());
+			return *this;
+		}
+
+		MyUniquePtr& operator= (const MyUniquePtr&) = delete;
+
+		pointer get() const noexcept {
+			return _myPtr;
+		}
+
+		deleter_type& get_deleter() noexcept {
+			return _myDeleter;
+		}
+
+		const deleter_type& get_deleter() const noexcept {
+			return _myDeleter;
+		}
+
+		explicit operator bool() const noexcept {
+			return (get() != nullptr);
+		}
+
+		pointer release() noexcept {
+			pointer _ptr = _myPtr;
+			_myPtr = nullptr;
+			return _ptr;
+		}
+
+		void reset(pointer _ptr = pointer()) noexcept {
+			get_deleter()(get());
+			_myPtr = _ptr;
+		}
+
+		void swap(MyUniquePtr& _other) noexcept {
+			::std::swap(_myPtr, _other._myPtr);
+			::std::swap(_myDeleter, _other._myDeleter);
+		}
+
+		element_type& operator[](size_t _index) const {
+			return *(get() + _index);
+		}
+
+	private:
+		pointer _myPtr;
+		deleter_type _myDeleter;
+	};
 }
 
 #endif
