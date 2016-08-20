@@ -3,7 +3,6 @@
 
 #include <atomic>
 #include <cassert>
-#include <type_traits>
 #include <utility>
 
 namespace MyTR1 {
@@ -45,38 +44,36 @@ namespace MyTR1 {
 	};
 
 	template <typename _T>
-	struct is_void {
-		static const bool value = false;
+	struct is_void : false_type 
+	{
 	};
 
 	template <>
-	struct is_void<void> {
-		static const bool value = true;
+	struct is_void<void> : true_type 
+	{
 	};
 
 	template <typename _T1, typename _T2>
-	struct is_same {
-		static const bool value = false;
+	struct is_same : false_type 
+	{
 	};
 
 	template <typename _T>
-	struct is_same<_T, _T> {
-		static const bool value = true;
+	struct is_same<_T, _T> : true_type 
+	{
 	};
 
 	template <typename _T>
-	struct is_array {
-		static const bool value = false;
+	struct is_array : false_type
+	{
 	};
 
 	template <typename _T>
-	struct is_array<_T[]> {
-		static const bool value = true;
+	struct is_array<_T[]> : true_type {
 	};
 
 	template <typename _T, size_t _N>
-	struct is_array<_T[_N]> {
-		static const bool value = true;
+	struct is_array<_T[_N]> : true_type {
 	};
 
 	template <typename _From, typename _To>
@@ -91,6 +88,32 @@ namespace MyTR1 {
 
 		static _From _dummy;
 		static const bool value = test(_dummy);
+	};
+
+	template <typename _T>
+	struct is_class {
+		template <typename _U>
+		static char helper(int _U::*) { return true; }
+
+		template <typename _U>
+		static int helper(...) { return false; }
+
+		static constexpr bool value = sizeof(helper<_T>(0)) == sizeof(char);
+	};
+
+	template <typename _Base, typename _Derived>
+	struct is_base_of {
+		struct _convert {
+			operator _Base*() const;
+			operator _Derived*();
+		};
+
+		template <typename _T>
+		static char helper(_Derived*, _T);
+
+		static int helper(_Base*, int);
+
+		static constexpr bool value = sizeof(helper(_convert(), 0)) == sizeof(char);
 	};
 
 	template <typename _T>
