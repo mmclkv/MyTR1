@@ -245,13 +245,39 @@ namespace MyTR1 {
 	};
 
 	template <typename _T>
-	class MySharedPtr;
+	class shared_ptr;
 
 	template <typename _T>
-	class MyWeakPtr;
+	class weak_ptr;
 
 	template <typename _T, typename _D>
-	class MyUniquePtr;
+	class unique_ptr;
+
+	template <typename _T>
+	class enable_shared_from_this {
+		friend class shared_ptr<_T>;
+	protected:
+		shared_ptr<_T> shared_from_this() {
+			shared_ptr<_T> p;
+			p = _weak_this;
+			assert(p);
+			return p;
+		}
+
+		shared_ptr<_T const> shared_from_this() const {
+			shared_ptr<_T> p;
+			p = _weak_this;
+			assert(p);
+			return p;
+		}
+
+		enable_shared_from_this<_T>& operator=(const enable_shared_from_this<_T> &obj) {
+			return *this;
+		}
+
+	private:
+		weak_ptr<_T> _weak_this;
+	};
 
 	class Ref_Count {
 	public:
@@ -367,54 +393,56 @@ namespace MyTR1 {
 	};
 
 	template <typename _T>
-	class MySharedPtr {
+	class shared_ptr {
 		template <typename _Tx>
-		friend class MySharedPtr;
+		friend class shared_ptr;
 
 		template <typename _Tx>
-		friend class MyWeakPtr;
+		friend class weak_ptr;
 
 		template <typename _Tx, typename _Dx>
-		friend class MyUniquePtr;
+		friend class unique_ptr;
 
 	public:
 		typedef _T element_type;
 
-		constexpr MySharedPtr() noexcept
+		constexpr shared_ptr() noexcept
 			// default constructor
 			: _myPtr(nullptr), _myRefC(nullptr)
 		{
 		}
 
-		constexpr MySharedPtr(::std::nullptr_t) noexcept
+		constexpr shared_ptr(::std::nullptr_t) noexcept
 			//null pointer constructor
 			: _myPtr(nullptr), _myRefC(nullptr)
 		{
 		}
 
 		template <typename _Y>
-		explicit MySharedPtr(_Y* _rawPtr)
+		explicit shared_ptr(_Y* _rawPtr)
 			//raw pointer constructor
 			: _myPtr(_rawPtr), _myRefC(new Ref_Count_Default<_Y>(_rawPtr))
 		{
+			_enable_shared_from_this(*this, _rawPtr);
 		}
 
 		template <typename _D>
-		MySharedPtr(::std::nullptr_t, _D _deleter)
+		shared_ptr(::std::nullptr_t, _D _deleter)
 			//pointer and deleter constructor
 			: _myPtr(nullptr), _myRefC(new Ref_Count_Del<_T, _D>(nullptr, _deleter))
 		{
 		}
 
 		template <typename _Y, typename _D>
-		MySharedPtr(_Y* _rawPtr, _D _deleter)
+		shared_ptr(_Y* _rawPtr, _D _deleter)
 			//pointer and deleter constructor
 			: _myPtr(_rawPtr), _myRefC(new Ref_Count_Del<_Y, _D>(_rawPtr, _deleter))
 		{
+			_enable_shared_from_this(*this, _rawPtr);
 		}
 
 		template <typename _D, typename _Alloc>
-		MySharedPtr(::std::nullptr_t, _D _deleter, _Alloc _alloc)
+		shared_ptr(::std::nullptr_t, _D _deleter, _Alloc _alloc)
 			: _myPtr(nullptr)
 		{
 			typedef Ref_Count_Del_Alloc<_T, _D, _Alloc> _MyRefType;
@@ -425,13 +453,13 @@ namespace MyTR1 {
 		}
 
 		template <typename _Y, typename _D, typename _Alloc>
-		MySharedPtr(_Y* _rawPtr, _D _del, _Alloc _alloc)
+		shared_ptr(_Y* _rawPtr, _D _del, _Alloc _alloc)
 			: _myPtr(_rawPtr)
 		{
 			//allocator of another type is allowed here, so rebind is needed
 
 			//a temporary pointer is needed here for construction because the 
-			//member pointer of MySharedPtr is a pointer to the base class of 
+			//member pointer of shared_ptr is a pointer to the base class of 
 			//reference count object
 
 			typedef Ref_Count_Del_Alloc<_T, _D, _Alloc> _MyRefType;
@@ -439,9 +467,10 @@ namespace MyTR1 {
 			_MyRefType* _refPtr = _actual_Alloc.allocate(1);
 			_actual_Alloc.construct(_refPtr, _myPtr, _del, _alloc);
 			_myRefC = _refPtr;
+			_enable_shared_from_this(*this, _rawPtr);
 		}
 
-		MySharedPtr(const MySharedPtr& _other) noexcept
+		shared_ptr(const shared_ptr& _other) noexcept
 			: _myPtr(_other._myPtr), _myRefC(_other._myRefC)
 		{
 			if (_myRefC)
@@ -449,7 +478,7 @@ namespace MyTR1 {
 		}
 
 		template <typename _U>
-		MySharedPtr(const MySharedPtr<_U>& _other) noexcept
+		shared_ptr(const shared_ptr<_U>& _other) noexcept
 			: _myPtr(_other._myPtr), _myRefC(_other._myRefC)
 		{
 			if (_myRefC)
@@ -457,7 +486,7 @@ namespace MyTR1 {
 		}
 
 		template <class _U>
-		MySharedPtr(const MyWeakPtr<_U>& _other) noexcept
+		shared_ptr(const weak_ptr<_U>& _other) noexcept
 		{
 			if (!_other.expired()) {
 				_myPtr = _other._myPtr;
@@ -470,7 +499,7 @@ namespace MyTR1 {
 			}
 		}
 
-		MySharedPtr(MySharedPtr&& _other) noexcept
+		shared_ptr(shared_ptr&& _other) noexcept
 			: _myPtr(_other._myPtr), _myRefC(_other._myRefC)
 		{
 			_other._myPtr = nullptr;
@@ -478,7 +507,7 @@ namespace MyTR1 {
 		}
 
 		template <typename _U>
-		MySharedPtr(MySharedPtr<_U>&& _other) noexcept
+		shared_ptr(shared_ptr<_U>&& _other) noexcept
 			: _myPtr(::std::move(_other._myPtr)), _myRefC(::std::move(_other._myRefC))
 		{
 			_other._myPtr = nullptr;
@@ -486,45 +515,46 @@ namespace MyTR1 {
 		}
 
 		template <typename _U>
-		MySharedPtr(const MySharedPtr<_U>& _other, _T* _rawPtr)
+		shared_ptr(const shared_ptr<_U>& _other, _T* _rawPtr)
 			: _myPtr(_rawPtr), _myRefC(_other._myRefC)
 		{
 			if (_myRefC)
 				_myRefC->_Increment();
+			_enable_shared_from_this(*this, _rawPtr);
 		}
 
-		~MySharedPtr() {
+		~shared_ptr() {
 			if (_myRefC)
 				_myRefC->_Decrement();
 		}
 
-		MySharedPtr& operator=(const MySharedPtr& _other) noexcept {
-			MySharedPtr(_other).swap(*this);
+		shared_ptr& operator=(const shared_ptr& _other) noexcept {
+			shared_ptr(_other).swap(*this);
 			return *this;
 		}
 
 		template<typename _U>
-		MySharedPtr& operator=(const MySharedPtr<_U>& _other) noexcept {
-			MySharedPtr(_other).swap(*this);
+		shared_ptr& operator=(const shared_ptr<_U>& _other) noexcept {
+			shared_ptr(_other).swap(*this);
 			return *this;
 		}
 
-		MySharedPtr& operator=(MySharedPtr&& _other) noexcept {
-			MySharedPtr(::std::move(_other)).swap(*this);
+		shared_ptr& operator=(shared_ptr&& _other) noexcept {
+			shared_ptr(::std::move(_other)).swap(*this);
 			return *this;
 		}
 
 		template<typename _U>
-		MySharedPtr& operator=(MySharedPtr<_U>&& _other) noexcept {
-			MySharedPtr(::std::move(_other)).swap(*this);
+		shared_ptr& operator=(shared_ptr<_U>&& _other) noexcept {
+			shared_ptr(::std::move(_other)).swap(*this);
 			return *this;
 		}
 
 
-		void swap(MySharedPtr& _other) noexcept {
+		void swap(shared_ptr& _other) noexcept {
 
 			//if we haven't defined our own version of swap() here, the built-in swap() 
-			//may execute the copy constructor and the copy assignment of MySharedPtr, causing redundant increment
+			//may execute the copy constructor and the copy assignment of shared_ptr, causing redundant increment
 			//and decrement
 
 			::std::swap(_myPtr, _other._myPtr);
@@ -532,22 +562,22 @@ namespace MyTR1 {
 		}
 
 		void reset() noexcept {
-			MySharedPtr().swap(*this);
+			shared_ptr().swap(*this);
 		}
 
 		template <typename _U>
 		void reset(_U* _rawPtr) noexcept {
-			MySharedPtr(_rawPtr).swap(*this);
+			shared_ptr(_rawPtr).swap(*this);
 		}
 
 		template <typename _U, typename _D>
 		void reset(_U* _rawPtr, _D _deleter) {
-			MySharedPtr(_rawPtr, _deleter).swap(*this);
+			shared_ptr(_rawPtr, _deleter).swap(*this);
 		}
 
 		template <typename _U, typename _D, typename _Alloc>
 		void reset(_U* _rawPtr, _D _deleter, _Alloc _alloc) {
-			MySharedPtr(_rawPtr, _deleter, _alloc).swap(*this);
+			shared_ptr(_rawPtr, _deleter, _alloc).swap(*this);
 		}
 
 		element_type* get() const noexcept {
@@ -577,30 +607,39 @@ namespace MyTR1 {
 		}
 
 	private:
+		template <typename _T, typename _Y>
+		void _enable_shared_from_this(const shared_ptr<_T>& _sp, enable_shared_from_this<_Y>* _rawPtr) {
+			_rawPtr->_weak_this = _sp;
+		}
+
+		void _enable_shared_from_this(...) 
+		{
+		}
+
 		element_type* _myPtr;
 		Ref_Count* _myRefC;
 	};
 
 	template <class _T>
-	class MyWeakPtr {
+	class weak_ptr {
 		template <class _Tx>
-		friend class MyWeakPtr;
+		friend class weak_ptr;
 
 		template <class _Tx>
-		friend class MySharedPtr;
+		friend class shared_ptr;
 
 		template <typename _Tx, typename _Dx>
-		friend class MyUniquePtr;
+		friend class unique_ptr;
 
 	public:
 		typedef _T element_type;
 
-		constexpr MyWeakPtr() noexcept
+		constexpr weak_ptr() noexcept
 			: _myPtr(nullptr), _myRefC(nullptr)
 		{
 		}
 
-		MyWeakPtr(const MyWeakPtr& _other) noexcept
+		weak_ptr(const weak_ptr& _other) noexcept
 			: _myPtr(_other._myPtr), _myRefC(_other._myRefC)
 		{
 			if (_myRefC)
@@ -608,7 +647,7 @@ namespace MyTR1 {
 		}
 
 		template <class _U>
-		MyWeakPtr(const MyWeakPtr<_U>& _other) noexcept
+		weak_ptr(const weak_ptr<_U>& _other) noexcept
 			: _myPtr(_other._myPtr), _myRefC(_other._myRefC)
 		{
 			if (_myRefC)
@@ -616,43 +655,43 @@ namespace MyTR1 {
 		}
 
 		template <class _U>
-		MyWeakPtr(const MySharedPtr<_U>& _other) noexcept
+		weak_ptr(const shared_ptr<_U>& _other) noexcept
 			: _myPtr(_other._myPtr), _myRefC(_other._myRefC)
 		{
 			if (_myRefC)
 				_myRefC->_Increment_Weak();
 		}
 
-		~MyWeakPtr() {
+		~weak_ptr() {
 			if (_myRefC)
 				_myRefC->_Decrement_Weak();
 		}
 
-		MyWeakPtr& operator= (const MyWeakPtr& _other) noexcept {
-			MyWeakPtr(_other).swap(*this);
+		weak_ptr& operator= (const weak_ptr& _other) noexcept {
+			weak_ptr(_other).swap(*this);
 			return *this;
 		}
 
 		template <class _U>
-		MyWeakPtr& operator= (const MyWeakPtr<_U>& _other) noexcept {
-			MyWeakPtr(_other).swap(*this);
+		weak_ptr& operator= (const weak_ptr<_U>& _other) noexcept {
+			weak_ptr(_other).swap(*this);
 			return *this;
 		}
 
 		template <class _U>
-		MyWeakPtr& operator= (const MySharedPtr<_U>& _other) noexcept {
-			MyWeakPtr(_other).swap(*this);
+		weak_ptr& operator= (const shared_ptr<_U>& _other) noexcept {
+			weak_ptr(_other).swap(*this);
 			return *this;
 
 		}
 
-		void swap(MyWeakPtr& _other) noexcept {
+		void swap(weak_ptr& _other) noexcept {
 			::std::swap(_myPtr, _other._myPtr);
 			::std::swap(_myRefC, _other._myRefC);
 		}
 
 		void reset() noexcept {
-			MyWeakPtr().swap(*this);
+			weak_ptr().swap(*this);
 		}
 
 		long use_count() const noexcept {
@@ -665,8 +704,8 @@ namespace MyTR1 {
 			return (use_count() == 0);
 		}
 
-		MySharedPtr<_T> lock() const noexcept {
-			return MySharedPtr<_T>(*this);
+		shared_ptr<_T> lock() const noexcept {
+			return shared_ptr<_T>(*this);
 		}
 
 	private:
@@ -675,95 +714,95 @@ namespace MyTR1 {
 	};
 
 	template <typename _T, typename _D = default_delete<_T>>
-	class MyUniquePtr {
+	class unique_ptr {
 		template <typename _Tx, typename _Dx>
-		friend class MyUniquePtr;
+		friend class unique_ptr;
 	public:
 		typedef _T element_type;
 		typedef _D deleter_type;
 		typedef typename has_member_pointer<typename remove_reference<_D>::type, _T*>::type pointer;
 
-		constexpr MyUniquePtr() noexcept
+		constexpr unique_ptr() noexcept
 			: _myPtr(nullptr), _myDeleter(_D())
 		{
 		}
 
-		constexpr MyUniquePtr(::std::nullptr_t) noexcept
+		constexpr unique_ptr(::std::nullptr_t) noexcept
 			: unique_ptr()
 		{
 		}
 
-		explicit MyUniquePtr(pointer _ptr) noexcept
+		explicit unique_ptr(pointer _ptr) noexcept
 			: _myPtr(_ptr), _myDeleter(_D())
 		{
 		}
 
-		MyUniquePtr(pointer _ptr,
+		unique_ptr(pointer _ptr,
 			typename conditional<is_reference<_D>::value, _D, const _D&>::type _del) noexcept
 			: _myPtr(_ptr), _myDeleter(_del)
 		{
 		}
 
-		MyUniquePtr(pointer _ptr,
+		unique_ptr(pointer _ptr,
 			typename remove_reference<_D>::type&& _del) noexcept
 			: _myPtr(_ptr), _myDeleter(::std::move(_del))
 		{
 		}
 
-		MyUniquePtr(MyUniquePtr&& _other) noexcept
+		unique_ptr(unique_ptr&& _other) noexcept
 			: _myPtr(_other.release()), _myDeleter(::std::forward<_D>(_other.get_deleter()))
 		{
 		}
 
 		template <typename _Tx, typename _Dx, typename =
 			      typename enable_if<
-			               is_convertible<typename MyUniquePtr<_Tx, _Dx>::pointer, 
+			               is_convertible<typename unique_ptr<_Tx, _Dx>::pointer, 
 			                              pointer>::value
 			               && !(is_array<_Tx>::value)
 			               && (is_reference<_Dx>::value 
 							   ? is_same<_D, _Dx>::value 
 							   : is_convertible<_Dx, _D>::value) 
 			               >::type>
-		MyUniquePtr(MyUniquePtr<_Tx, _Dx>&& _other) noexcept 
+		unique_ptr(unique_ptr<_Tx, _Dx>&& _other) noexcept 
 			: _myPtr(_other.release()), _myDeleter(::std::forward<_Dx>(_other.get_deleter()))
 		{
 		}
 
-		MyUniquePtr(const MyUniquePtr&) = delete;
+		unique_ptr(const unique_ptr&) = delete;
 
-		~MyUniquePtr() {
+		~unique_ptr() {
 			if (get()) {
 				get_deleter()(get());
 			}
 		}
 
-		MyUniquePtr& operator= (MyUniquePtr&& _other) noexcept {
+		unique_ptr& operator= (unique_ptr&& _other) noexcept {
 			reset(_other.release());
 			get_deleter() = ::std::forward<_D>(_other.get_deleter());
 			return *this;
 		}
 
-		MyUniquePtr& operator= (::std::nullptr_t) noexcept {
+		unique_ptr& operator= (::std::nullptr_t) noexcept {
 			reset();
 			return *this;
 		}
 
 		template <class _Tx, class _Dx, typename =
 				  typename enable_if<
-			               is_convertible<typename MyUniquePtr<_Tx, _Dx>::pointer,
+			               is_convertible<typename unique_ptr<_Tx, _Dx>::pointer,
 			                              pointer>::value
 			               && !(is_array<_Tx>::value)
 			               && (is_reference<_Dx>::value
 				               ? is_same<_D, _Dx>::value
 				               : is_convertible<_Dx, _D>::value)
 		                   >::type>
-		MyUniquePtr& operator= (MyUniquePtr<_Tx, _Dx>&& _other) noexcept {
+		unique_ptr& operator= (unique_ptr<_Tx, _Dx>&& _other) noexcept {
 			reset(_other.release());
 			get_deleter() = ::std::forward<_Dx>(_other.get_deleter());
 			return *this;
 		}
 	
-		MyUniquePtr& operator= (const MyUniquePtr&) = delete;
+		unique_ptr& operator= (const unique_ptr&) = delete;
 
 		pointer get() const noexcept {
 			return _myPtr;
@@ -792,7 +831,7 @@ namespace MyTR1 {
 			_myPtr = _ptr;
 		}
 
-		void swap(MyUniquePtr& _other) noexcept {
+		void swap(unique_ptr& _other) noexcept {
 			::std::swap(_myPtr, _other._myPtr);
 			::std::swap(_myDeleter, _other._myDeleter);
 		}
@@ -811,64 +850,64 @@ namespace MyTR1 {
 	};
 
 	template <typename _T, typename _D>
-	class MyUniquePtr<_T[], _D> {
+	class unique_ptr<_T[], _D> {
 	public:
 		typedef _T element_type;
 		typedef _D deleter_type;
 		typedef typename has_member_pointer<typename remove_reference<_D>::type, _T*>::type pointer;
 
-		constexpr MyUniquePtr() noexcept
+		constexpr unique_ptr() noexcept
 			: _myPtr(nullptr), _myDeleter(_D())
 		{
 		}
 
-		constexpr MyUniquePtr(::std::nullptr_t) noexcept
+		constexpr unique_ptr(::std::nullptr_t) noexcept
 			: unique_ptr()
 		{
 		}
 
-		explicit MyUniquePtr(pointer _ptr) noexcept
+		explicit unique_ptr(pointer _ptr) noexcept
 			: _myPtr(_ptr), _myDeleter(_D())
 		{
 		}
 
-		MyUniquePtr(pointer _ptr,
+		unique_ptr(pointer _ptr,
 			typename conditional<is_reference<_D>::value, _D, const _D&>::type _del) noexcept
 			: _myPtr(_ptr), _myDeleter(_del)
 		{
 		}
 
-		MyUniquePtr(pointer _ptr,
+		unique_ptr(pointer _ptr,
 			typename remove_reference<_D>::type&& _del) noexcept
 			: _myPtr(_ptr), _myDeleter(::std::move(_del))
 		{
 		}
 
-		MyUniquePtr(MyUniquePtr&& _other) noexcept
+		unique_ptr(unique_ptr&& _other) noexcept
 			: _myPtr(_other.release()), _myDeleter(::std::forward<_D>(_other.get_deleter()))
 		{
 		}
 
-		MyUniquePtr(const MyUniquePtr&) = delete;
+		unique_ptr(const unique_ptr&) = delete;
 
-		~MyUniquePtr() {
+		~unique_ptr() {
 			if (get()) {
 				get_deleter()(get());
 			}
 		}
 
-		MyUniquePtr& operator= (MyUniquePtr&& _other) noexcept {
+		unique_ptr& operator= (unique_ptr&& _other) noexcept {
 			reset(_other.release());
 			get_deleter() = ::std::forward<_D>(_other.get_deleter());
 			return *this;
 		}
 
-		MyUniquePtr& operator= (::std::nullptr_t) noexcept {
+		unique_ptr& operator= (::std::nullptr_t) noexcept {
 			reset();
 			return *this;
 		}
 
-		MyUniquePtr& operator= (const MyUniquePtr&) = delete;
+		unique_ptr& operator= (const unique_ptr&) = delete;
 
 		pointer get() const noexcept {
 			return _myPtr;
@@ -897,7 +936,7 @@ namespace MyTR1 {
 			_myPtr = _ptr;
 		}
 
-		void swap(MyUniquePtr& _other) noexcept {
+		void swap(unique_ptr& _other) noexcept {
 			::std::swap(_myPtr, _other._myPtr);
 			::std::swap(_myDeleter, _other._myDeleter);
 		}
