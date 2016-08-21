@@ -256,6 +256,18 @@ namespace MyTR1 {
 	template <typename _T>
 	class enable_shared_from_this {
 		friend class shared_ptr<_T>;
+	public:
+		/*
+		constexpr enable_shared_from_this() noexcept
+			: _weak_this()
+		{
+		}
+
+		enable_shared_from_this(const enable_shared_from_this<_T>&obj) noexcept
+			: _weak_this()
+		{
+		}
+		*/
 	protected:
 		shared_ptr<_T> shared_from_this() {
 			shared_ptr<_T> p;
